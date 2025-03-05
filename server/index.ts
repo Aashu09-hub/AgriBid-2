@@ -7,7 +7,7 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
-const MONGO_URI = "mongodb+srv://aashugupta5151:<tRYG1lIbmZ0h5efE>@agribid.fs0y5.mongodb.net/?retryWrites=true&w=majority&appName=Agribid";
+const MONGO_URI = "mongodb://localhost:27017/AgriBid";
 
 // Enable Mongoose debugging to log queries
 mongoose.set("debug", true);
