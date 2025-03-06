@@ -7,7 +7,6 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  DialogDescription,
 } from "@/components/ui/dialog";
 import {
   Form,
@@ -41,26 +40,15 @@ export default function ProductListing() {
 
   const { data: products, isLoading } = useQuery<Product[]>({
     queryKey: ["/api/products"],
-    queryFn: async () => {
-      const res = await apiRequest("GET", "/api/products");
-      return res.json();
-    },
   });
 
   const createProduct = useMutation({
     mutationFn: async (data: InsertProduct) => {
       const res = await apiRequest("POST", "/api/products", data);
-      if (!res.ok) {
-        throw new Error("Failed to create product");
-      }
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/products"] });
-      toast({ title: "Product created successfully" });
-    },
-    onError: (error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
     },
   });
 
@@ -75,6 +63,41 @@ export default function ProductListing() {
     },
   });
 
+  const createContract = useMutation({
+    mutationFn: async (productId: number) => {
+      const product = products?.find(p => p.id === productId);
+      if (!product) throw new Error("Product not found");
+
+      const res = await apiRequest("POST", "/api/contracts", {
+        productId,
+        quantity: product.quantity,
+        price: product.price,
+        deliveryDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      });
+
+      if (!res.ok) {
+        const error = await res.text();
+        throw new Error(error || "Failed to create contract");
+      }
+
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/contracts"] });
+      toast({
+        title: "Contract created",
+        description: "The contract has been sent to the farmer for review.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to create contract",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   return (
     <div className="min-h-screen bg-background">
       <header className="bg-primary text-primary-foreground py-4">
@@ -85,12 +108,9 @@ export default function ProductListing() {
               <DialogTrigger asChild>
                 <Button>List New Product</Button>
               </DialogTrigger>
-              <DialogContent aria-describedby="dialog-description">
+              <DialogContent>
                 <DialogHeader>
                   <DialogTitle>Create New Product Listing</DialogTitle>
-                  <DialogDescription id="dialog-description">
-                    Fill in the details to create a new product listing.
-                  </DialogDescription>
                 </DialogHeader>
                 <Form {...form}>
                   <form
@@ -164,7 +184,11 @@ export default function ProductListing() {
                         </FormItem>
                       )}
                     />
-                    <Button type="submit" className="w-full" disabled={createProduct.isPending}>
+                    <Button
+                      type="submit"
+                      className="w-full"
+                      disabled={createProduct.isPending}
+                    >
                       {createProduct.isPending && (
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       )}
@@ -177,6 +201,55 @@ export default function ProductListing() {
           )}
         </div>
       </header>
+
+      <main className="container mx-auto px-4 py-8">
+        {isLoading ? (
+          <div className="flex justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+        ) : (
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {products?.map((product) => (
+              <Card key={product.id}>
+                <CardHeader>
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <CardTitle>{product.name}</CardTitle>
+                      <CardDescription>
+                        {product.quantity} {product.unit} available
+                      </CardDescription>
+                    </div>
+                    <Badge variant={product.status === "available" ? "default" : "secondary"}>
+                      {product.status}
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    {product.description}
+                  </p>
+                  <div className="flex justify-between items-center">
+                    <span className="text-lg font-bold">${product.price}</span>
+                    {!isFarmer && product.status === "available" && (
+                      <Button
+                        onClick={() => createContract.mutate(product.id)}
+                        disabled={createContract.isPending}
+                      >
+                        {createContract.isPending ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <Package className="mr-2 h-4 w-4" />
+                        )}
+                        Create Contract
+                      </Button>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+      </main>
     </div>
   );
 }
